@@ -7,6 +7,7 @@
  */
 import { createApp } from '../src/app.js';
 import { connectDatabase } from '../src/config/db.js';
+import { getProductionConfigurationError } from '../src/config/env.js';
 
 const app = createApp();
 let databaseConnection;
@@ -24,6 +25,15 @@ function ensureDatabaseConnection() {
 }
 
 export default async function handler(req, res) {
+  const configurationError = getProductionConfigurationError();
+  if (configurationError) {
+    console.error(`Backend configuration error: ${configurationError}`);
+    return res.status(503).json({
+      success: false,
+      message: 'Backend deployment is missing required environment variables',
+    });
+  }
+
   try {
     await ensureDatabaseConnection();
     return app(req, res);

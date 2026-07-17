@@ -375,6 +375,24 @@ POST   /api/policies/ask              # ask the Policy Assistant
 
 ---
 
+## Deploying to Vercel
+
+This repository uses a single **Vercel Services** deployment: the Vite frontend
+serves the application and the Express backend handles requests under `/api`.
+
+1. Import this repository in Vercel with `ems` as the project root directory.
+2. In **Settings → Build and Deployment**, set the framework preset to **Services**.
+3. Add these environment variables for Production (and Preview when required):
+   `MONGO_URI`, `JWT_SECRET`, `JWT_EXPIRES_IN`, and `CLIENT_ORIGIN`.
+4. Set `CLIENT_ORIGIN` to the deployed HTTPS application URL and allow Vercel's
+   deployment traffic in MongoDB Atlas Network Access.
+
+The backend returns a safe `503` response if required production variables are
+missing, instead of silently falling back to local development values. Never
+commit real secrets or a `.env` file.
+
+---
+
 ## 📝 License
 
 Released under the **MIT License** — provided for assignment evaluation.
