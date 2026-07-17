@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#4f46e5" />
+    <title>EMS — Employee Management System</title>
+
+    <!-- Inter typeface for a clean, modern, professional look. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Prevent a flash of the wrong theme: apply the saved theme before paint. -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('ems_theme');
+          if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          document.documentElement.classList.toggle('dark', t === 'dark');
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <!-- React mounts here; see src/main.tsx -->
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

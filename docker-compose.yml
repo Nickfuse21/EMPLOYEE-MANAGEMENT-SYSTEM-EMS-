@@ -1,0 +1,41 @@
+# ---------------------------------------------------------------------------
+# One-command local stack: MongoDB + backend API + frontend (nginx).
+# Usage:  docker compose up --build
+#         then seed once:  docker compose exec backend npm run seed
+# ---------------------------------------------------------------------------
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongo_data:/data/db
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      - mongo
+    environment:
+      PORT: 5000
+      NODE_ENV: production
+      MONGO_URI: mongodb://mongo:27017/ems
+      JWT_SECRET: change_this_to_a_long_random_secret
+      JWT_EXPIRES_IN: 1d
+      CLIENT_ORIGIN: http://localhost:8080
+      SEED_ADMIN_EMAIL: admin@ems.com
+      SEED_ADMIN_PASSWORD: Admin@123
+    ports:
+      - '5000:5000'
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - '8080:80'
+
+volumes:
+  mongo_data:
