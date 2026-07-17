@@ -7,7 +7,10 @@
  */
 import { NavLink, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { LayoutDashboard, Users, Network, UserCircle, Building2, UsersRound, type LucideIcon } from 'lucide-react';
+import {
+  LayoutDashboard, Users, Network, UserCircle, Building2, UsersRound,
+  CalendarDays, LifeBuoy, TrendingDown, Sparkles, ShieldCheck, type LucideIcon,
+} from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { ROLE_LABELS } from '../../lib/constants';
 import type { Role } from '../../types';
@@ -23,8 +26,13 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['super_admin', 'hr_manager'] },
   { to: '/employees', label: 'Employees', icon: Users, roles: ['super_admin', 'hr_manager'] },
+  { to: '/attrition', label: 'Attrition Risk', icon: TrendingDown, roles: ['super_admin', 'hr_manager'] },
   { to: '/my-team', label: 'My Team', icon: UsersRound },
   { to: '/organization', label: 'Org Chart', icon: Network },
+  { to: '/leave', label: 'Leave', icon: CalendarDays },
+  { to: '/tickets', label: 'Helpdesk', icon: LifeBuoy },
+  { to: '/policies', label: 'Policy Assistant', icon: Sparkles },
+  { to: '/audit', label: 'Audit Trail', icon: ShieldCheck, roles: ['super_admin'] },
   { to: '/profile', label: 'My Profile', icon: UserCircle },
 ];
 

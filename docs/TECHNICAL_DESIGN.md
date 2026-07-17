@@ -152,6 +152,53 @@ handler that returns a consistent JSON shape.
 - **Dark mode** (Tailwind `dark:` classes + a theme toggle saved in the browser).
 - **Docker** files so the whole thing can run with one command.
 
+## 9b. Extended modules (per-role features)
+
+On top of the core CRUD, the app has five modules that give each role something
+genuinely different to do. All of them are plain Node + Mongo — **no external AI,
+ML service, or vector database** — so every one is explainable end to end.
+
+### Audit trail (Super Admin)
+An **append-only** `AuditLog` collection: every critical action (logins & failed
+logins, employee create/update/delete, salary or role changes, leave decisions)
+inserts one row via a small `auditService.recordAudit()` helper. It's called as a
+*side effect* after the real action succeeds, and wrapped in a try/catch so a
+logging failure can never break the user's request. Nothing ever updates or
+deletes a row — that's what makes it trustworthy.
+> Interview line: *"It's write-once. I log the event after the action commits, and
+> logging is best-effort so it never affects the main request."*
+
+### Leave management (Employee ↔ HR)
+Employees apply for leave; HR/Admin approve or reject. The clever bit is the
+**balance is derived, not stored**: I sum the days from a person's *approved*
+requests and subtract from the allowance. There's no counter to keep in sync, so
+the balance can never be wrong.
+
+### Helpdesk (Employee ↔ HR)
+A `Ticket` model with an embedded comment thread and an auto `TKT-0001` id.
+Employees see only their own tickets; HR/Admin see all and can triage. Access is
+enforced in the controller (`assertCanView`), not just the UI.
+
+### Attrition / flight-risk (HR / Super Admin)
+A **transparent weighted heuristic** in `attritionService.js` — explicitly *not*
+machine learning. Each employee gets 0–100 from named factors: pay vs. the
+department median, leave utilisation, unpaid leave, open tickets, and tenure.
+Every point comes with a human-readable reason, shown in the UI. I can defend
+exactly why anyone is flagged.
+> Interview line: *"I called it a heuristic on purpose — a black-box ML score I
+> couldn't explain would be worse than a simple rule set I can."*
+
+### Policy Assistant (everyone) — the honest "RAG"
+Ask the handbook a question; get an answer grounded in real policy text with
+citations. Under the hood it's **keyword-relevance search** (`policySearchService.js`):
+tokenise the question, score each paragraph by matching terms weighted by rarity
+(the TF-IDF intuition), and return the best passage. The important part is the
+**access control**: each query filters documents to `audience: <your role>` *before*
+searching, so an "executive-only" doc (e.g. compensation bands) is never even
+loaded for a standard employee — it can't leak.
+> Interview line: *"It's not an LLM or a vector DB — it's cited keyword search, and
+> restricted documents are filtered out before the search runs, not after."*
+
 ## 10. Things I'd add with more time
 
 Honest, realistic next steps (good to mention — shows you know what's missing):

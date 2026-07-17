@@ -19,6 +19,11 @@ import EmployeeDetailPage from './pages/EmployeeDetailPage';
 import OrganizationPage from './pages/OrganizationPage';
 import ProfilePage from './pages/ProfilePage';
 import MyTeamPage from './pages/MyTeamPage';
+import LeavePage from './pages/LeavePage';
+import TicketsPage from './pages/TicketsPage';
+import AttritionPage from './pages/AttritionPage';
+import PolicyAssistantPage from './pages/PolicyAssistantPage';
+import AuditLogPage from './pages/AuditLogPage';
 import NotFoundPage from './pages/NotFoundPage';
 
 export default function App() {
@@ -30,18 +35,27 @@ export default function App() {
       {/* Authenticated routes share the app layout (sidebar + navbar). */}
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
-          {/* Management-only routes. */}
+          {/* Management-only routes (Super Admin + HR). */}
           <Route element={<RoleRoute allow={['super_admin', 'hr_manager']} />}>
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/employees" element={<EmployeesPage />} />
             <Route path="/employees/new" element={<EmployeeFormPage />} />
             <Route path="/employees/:id/edit" element={<EmployeeFormPage />} />
+            <Route path="/attrition" element={<AttritionPage />} />
+          </Route>
+
+          {/* Super-Admin-only routes. */}
+          <Route element={<RoleRoute allow={['super_admin']} />}>
+            <Route path="/audit" element={<AuditLogPage />} />
           </Route>
 
           {/* Available to every authenticated user. */}
           <Route path="/employees/:id" element={<EmployeeDetailPage />} />
           <Route path="/organization" element={<OrganizationPage />} />
           <Route path="/my-team" element={<MyTeamPage />} />
+          <Route path="/leave" element={<LeavePage />} />
+          <Route path="/tickets" element={<TicketsPage />} />
+          <Route path="/policies" element={<PolicyAssistantPage />} />
           <Route path="/profile" element={<ProfilePage />} />
 
           {/* Default landing depends on the user's role. */}

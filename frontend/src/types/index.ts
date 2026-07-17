@@ -79,3 +79,108 @@ export interface EmployeeQuery {
   page?: number;
   limit?: number;
 }
+
+/* ------------------------------------------------------------------ */
+/* Extended feature types                                              */
+/* ------------------------------------------------------------------ */
+
+/** A single audit-trail entry (Super Admin). */
+export interface AuditLog {
+  _id: string;
+  action: string;
+  actorName: string;
+  actorRole: string;
+  targetName?: string;
+  summary: string;
+  metadata?: Record<string, unknown>;
+  ip?: string;
+  createdAt: string;
+}
+
+export type LeaveType = 'annual' | 'sick' | 'casual' | 'unpaid';
+export type LeaveStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
+
+export interface LeaveRequest {
+  _id: string;
+  employee: Employee;
+  type: LeaveType;
+  startDate: string;
+  endDate: string;
+  days: number;
+  reason?: string;
+  status: LeaveStatus;
+  reviewedBy?: { _id: string; name: string } | null;
+  reviewNote?: string;
+  reviewedAt?: string | null;
+  createdAt: string;
+}
+
+/** One paid-leave type's balance. */
+export interface LeaveBalance {
+  type: LeaveType;
+  allowance: number;
+  used: number;
+  remaining: number;
+}
+
+export type TicketCategory = 'it' | 'hr' | 'payroll' | 'facilities' | 'other';
+export type TicketPriority = 'low' | 'medium' | 'high' | 'urgent';
+export type TicketStatus = 'open' | 'in_progress' | 'resolved' | 'closed';
+
+export interface TicketComment {
+  _id?: string;
+  author: string;
+  authorName: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface Ticket {
+  _id: string;
+  ticketId: string;
+  subject: string;
+  description: string;
+  category: TicketCategory;
+  priority: TicketPriority;
+  status: TicketStatus;
+  raisedBy: Employee;
+  assignedTo?: { _id: string; name: string; employeeId: string; profileImage?: string } | null;
+  comments: TicketComment[];
+  createdAt: string;
+}
+
+/** A single scored employee in the attrition report. */
+export interface AttritionRisk {
+  employee: Employee;
+  score: number;
+  band: 'low' | 'medium' | 'high';
+  factors: { label: string; points: number }[];
+}
+
+export interface AttritionReport {
+  summary: { high: number; medium: number; low: number };
+  employees: AttritionRisk[];
+}
+
+/** A handbook document summary (list view). */
+export interface PolicySummary {
+  _id: string;
+  title: string;
+  category: string;
+  updatedAt: string;
+}
+
+/** A cited passage returned by the policy assistant. */
+export interface PolicyCitation {
+  id: string;
+  title: string;
+  category: string;
+  passage: string;
+}
+
+export interface PolicyAnswer {
+  answer: string | null;
+  message?: string;
+  matchedTerms?: string[];
+  citations: PolicyCitation[];
+}

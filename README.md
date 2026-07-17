@@ -77,6 +77,22 @@ a single `docker compose up`.
 | ✅ **Validation** | Server-side (express-validator + Mongoose) **and** client-side |
 | 🎁 **Bonus** | Pagination · Soft delete · Dashboard charts · Dark mode · Docker · Seed script |
 
+### 🧩 Extended modules — genuinely different features per role
+
+| Module | Role focus | What it does |
+|--------|-----------|--------------|
+| 🛡️ **Audit trail** | Super Admin | Append-only log of security-critical actions (logins & failed logins, employee / salary / role changes, leave decisions). Read-only and filterable. |
+| 🌴 **Leave management** | Employee ↔ HR | Employees apply for leave and see a live balance; HR / Admin approve or reject. Balance is **derived** from approved requests, so it can never drift. |
+| 🎫 **Helpdesk** | Employee ↔ HR | Employees raise IT / HR tickets with a comment thread; HR / Admin triage (assign, change status & priority). |
+| 📉 **Attrition risk** | HR / Super Admin | A **transparent, rule-based** flight-risk score (0–100) per employee — every contributing factor is shown. Not ML: fully explainable. |
+| 🤖 **Policy Assistant** | Everyone | Ask the handbook a plain-English question and get an answer **grounded in real policy text and cited**. Keyword-relevance search, role-scoped so restricted docs never leak. |
+
+> 🧠 **On the "AI":** the Policy Assistant and Attrition score are honest,
+> dependency-free heuristics (keyword-relevance search and a weighted rule set) —
+> **no external LLM, vector DB, or ML service**. That's deliberate: every result
+> can be explained line-by-line, which is exactly what you want to defend in an
+> interview.
+
 <details>
 <summary><b>🛡️ Click to view the full role-permission matrix</b></summary>
 
@@ -91,6 +107,11 @@ a single `docker compose up`.
 | Assign reporting manager | ✅ | ✅ | ❌ |
 | View org chart | ✅ | ✅ | ✅ |
 | View / edit **own** profile (limited fields) | ✅ | ✅ | ✅ |
+| View the audit trail | ✅ | ❌ | ❌ |
+| View attrition-risk report | ✅ | ✅ | ❌ |
+| Approve / reject leave | ✅ | ✅ | ❌ |
+| Triage helpdesk tickets | ✅ | ✅ | ❌ |
+| Apply for leave · raise a ticket · ask the Policy Assistant | ✅ | ✅ | ✅ |
 
 </details>
 
@@ -211,11 +232,11 @@ ems/
 ├── backend/                 # Express REST API
 │   ├── src/
 │   │   ├── config/          # env + database connection
-│   │   ├── models/          # Mongoose Employee schema
+│   │   ├── models/          # Employee, AuditLog, LeaveRequest, Ticket, PolicyDoc
 │   │   ├── middleware/      # auth, RBAC, validation, error handling
 │   │   ├── validators/      # express-validator rule sets
-│   │   ├── controllers/     # auth, employee, dashboard, organization
-│   │   ├── services/        # org-tree + circular-reporting logic
+│   │   ├── controllers/     # auth, employee, dashboard, org, audit, leave, ticket, analytics, policy
+│   │   ├── services/        # org-tree, circular-check, audit, attrition, policy-search
 │   │   ├── routes/          # route definitions
 │   │   ├── utils/           # ApiError, asyncHandler, token, roles
 │   │   ├── app.js           # Express app factory
@@ -228,7 +249,7 @@ ems/
 │   │   ├── components/      # layout, UI primitives, route guards
 │   │   ├── context/         # Auth + Theme providers
 │   │   ├── hooks/           # useDebounce
-│   │   ├── pages/           # Login, Dashboard, Employees, Form, Detail, Org, Profile
+│   │   ├── pages/           # Login, Dashboard, Employees, Org, Leave, Tickets, Attrition, Policies, Audit, Profile
 │   │   ├── lib/             # constants + formatting helpers
 │   │   └── types/           # shared TypeScript types
 │   └── Dockerfile
@@ -321,7 +342,22 @@ DELETE /api/employees/:id             # soft delete
 GET    /api/employees/:id/reportees
 PATCH  /api/employees/:id/manager
 GET    /api/organization/tree
+GET    /api/organization/my-team
 GET    /api/dashboard/stats
+
+# Extended modules
+GET    /api/audit                     # Super Admin — audit trail
+GET    /api/leave                     # leave requests (own, or all for HR/Admin)
+GET    /api/leave/balance             # my leave balance
+POST   /api/leave                     # apply for leave
+PATCH  /api/leave/:id/decision        # HR/Admin — approve / reject
+GET    /api/tickets                   # helpdesk tickets
+POST   /api/tickets                   # raise a ticket
+PATCH  /api/tickets/:id               # HR/Admin — triage
+POST   /api/tickets/:id/comments      # reply on a ticket
+GET    /api/analytics/attrition       # HR/Admin — flight-risk report
+GET    /api/policies                  # handbook (role-scoped)
+POST   /api/policies/ask              # ask the Policy Assistant
 ```
 
 </details>

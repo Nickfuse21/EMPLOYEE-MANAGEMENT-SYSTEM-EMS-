@@ -182,6 +182,127 @@ Admin** — HR never receives them.
 
 ---
 
+## Audit trail
+
+### GET `/audit` 🔒 · Super Admin
+Append-only security log, newest first. Read-only — entries are never edited or
+deleted.
+
+**Query params:** `action` (e.g. `auth.login_failed`, `employee.salary_changed`),
+`search` (matches actor / target / summary), `page`, `limit`.
+```json
+{
+  "success": true,
+  "data": [
+    { "action": "employee.salary_changed", "actorName": "System Administrator",
+      "targetName": "John Doe", "summary": "Salary changed 90000 → 95000",
+      "ip": "::1", "createdAt": "2026-07-18T09:00:00.000Z" }
+  ],
+  "pagination": { "total": 42, "page": 1, "limit": 20, "totalPages": 3 }
+}
+```
+
+---
+
+## Leave
+
+### GET `/leave/balance` 🔒
+The caller's own remaining balance per paid leave type.
+```json
+{ "success": true, "data": [ { "type": "annual", "allowance": 20, "used": 5, "remaining": 15 } ] }
+```
+
+### GET `/leave` 🔒
+Employees receive only their own requests; HR & Super Admin receive everyone's
+(optionally filtered by `?status=`).
+
+### POST `/leave` 🔒
+Apply for leave (always on your own behalf). Body: `type` (`annual|sick|casual|unpaid`),
+`startDate`, `endDate`, optional `reason`. Day count is computed server-side. → `201`
+
+### PATCH `/leave/:id/decision` 🔒 · Super Admin, HR
+Approve or reject a pending request. Body: `{ "decision": "approved" | "rejected", "reviewNote": "" }`.
+An approval is what draws down the balance.
+
+### PATCH `/leave/:id/cancel` 🔒
+The owner (or a manager) cancels a still-pending request.
+
+---
+
+## Helpdesk tickets
+
+### GET `/tickets` 🔒
+Employees see only tickets they raised; HR & Super Admin see all (filter with
+`?status=` / `?category=`).
+
+### POST `/tickets` 🔒
+Raise a ticket. Body: `subject`, `description`, `category` (`it|hr|payroll|facilities|other`),
+`priority` (`low|medium|high|urgent`). A `ticketId` like `TKT-0001` is generated. → `201`
+
+### GET `/tickets/:id` 🔒
+One ticket with its full comment thread (owner or agent only).
+
+### PATCH `/tickets/:id` 🔒 · Super Admin, HR
+Triage — change `status`, `priority`, `category`, or `assignedTo`.
+
+### POST `/tickets/:id/comments` 🔒
+Add a comment to the thread (owner or agent). Body: `{ "body": "…" }`. → `201`
+
+---
+
+## Analytics
+
+### GET `/analytics/attrition` 🔒 · Super Admin, HR
+Transparent, rule-based flight-risk score (0–100) for every active employee,
+highest first, plus a per-band summary. **Not machine learning** — each score
+lists the exact factors that produced it.
+```json
+{
+  "success": true,
+  "data": {
+    "summary": { "high": 1, "medium": 2, "low": 3 },
+    "employees": [
+      {
+        "employee": { "name": "John Doe", "department": "Engineering", "...": "..." },
+        "score": 65, "band": "medium",
+        "factors": [
+          { "label": "Paid 34% below the Engineering median", "points": 30 },
+          { "label": "Took 2 day(s) of unpaid leave", "points": 15 }
+        ]
+      }
+    ]
+  }
+}
+```
+
+---
+
+## Policy Assistant
+
+### GET `/policies` 🔒
+Lists the handbook documents the caller's role is allowed to see (titles +
+categories). Restricted docs (e.g. `compensation`) never appear for the wrong role.
+
+### POST `/policies/ask` 🔒
+Ask a plain-English question. The search runs **only over documents the caller may
+see**, so restricted content can never leak. Body: `{ "question": "what is the travel meal limit?" }`.
+```json
+{
+  "success": true,
+  "data": {
+    "answer": "The daily meal reimbursement limit for domestic travel is 60 USD…",
+    "matchedTerms": ["travel", "meal", "reimbursement", "limit"],
+    "citations": [ { "title": "Travel & Expense Reimbursement", "category": "travel", "passage": "…" } ]
+  }
+}
+```
+
+### GET `/policies/:id` 🔒
+Read one full document — 404 if it is outside the caller's audience (we don't
+reveal that it exists).
+
+---
+
 ## Health
 
 ### GET `/health`
