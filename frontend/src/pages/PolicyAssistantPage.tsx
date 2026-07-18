@@ -2,10 +2,9 @@
  * Policy Assistant page (every authenticated user).
  *
  * Ask a plain-English question about company policy and get an answer grounded
- * in the handbook, with the exact source passages cited. Search only runs over
- * the documents your role is allowed to see, so restricted content is never
- * surfaced. Honest framing: this is keyword-relevance search over real docs, not
- * a large language model.
+ * in the handbook, with the exact source passages cited. It uses keyword-relevance
+ * search, and only runs over the documents your role is allowed to see, so
+ * restricted content is never surfaced.
  */
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';

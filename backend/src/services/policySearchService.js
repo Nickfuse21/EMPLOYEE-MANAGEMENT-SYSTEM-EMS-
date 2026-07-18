@@ -1,16 +1,15 @@
 /**
- * Policy search — the honest, dependency-free core of the "policy assistant".
+ * Policy search — the dependency-free core of the Policy Assistant.
  *
- * This is NOT an LLM and NOT a vector database. It is keyword-relevance search:
- * we split each document into paragraphs, score every paragraph by how many of
- * the question's meaningful words it contains (weighting rarer words higher, the
- * classic TF-IDF intuition), and return the best-matching passages as the
- * "answer" with the document title as a citation. It's explainable end-to-end —
- * you can point at exactly why a passage was chosen.
+ * Keyword-relevance search: split each document into paragraphs, score every
+ * paragraph by how many of the question's meaningful words it contains (weighting
+ * rarer words higher — the classic TF-IDF idea), and return the best-matching
+ * passages as the answer, with the document title as a citation. It's explainable
+ * end-to-end: you can point at exactly why a passage was chosen.
  *
- * The RAG-style value it delivers: answers are grounded in real handbook text
- * and always cited, and — critically — search only ever runs over documents the
- * caller is allowed to see (access is filtered before scoring, in the caller).
+ * Answers are grounded in real handbook text and always cited, and — critically —
+ * search only ever runs over documents the caller is allowed to see (access is
+ * filtered before scoring, in the caller).
  */
 
 /** Words too common to be useful for matching. */

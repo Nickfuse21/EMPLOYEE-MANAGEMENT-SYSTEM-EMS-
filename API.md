@@ -254,8 +254,8 @@ Add a comment to the thread (owner or agent). Body: `{ "body": "…" }`. → `20
 
 ### GET `/analytics/attrition` 🔒 · Super Admin, HR
 Transparent, rule-based flight-risk score (0–100) for every active employee,
-highest first, plus a per-band summary. **Not machine learning** — each score
-lists the exact factors that produced it.
+highest first, plus a per-band summary. Each score lists the exact factors that
+produced it.
 ```json
 {
   "success": true,

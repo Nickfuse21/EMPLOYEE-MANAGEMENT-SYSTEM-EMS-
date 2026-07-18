@@ -1,11 +1,10 @@
 /**
  * Attrition ("flight risk") scoring service.
  *
- * IMPORTANT — this is a TRANSPARENT, RULE-BASED heuristic, not a machine-learning
- * model. Every point in an employee's score comes from a named factor with a
- * clear reason, so HR can see *why* someone is flagged and the whole thing can be
- * explained in one sentence. It reads only data the system already has (salary vs
- * department median, leave usage, open helpdesk tickets, tenure).
+ * A transparent, rule-based scoring heuristic. Every point in an employee's score
+ * comes from a named factor with a clear reason, so HR can see *why* someone is
+ * flagged. It reads only data the system already has (salary vs department median,
+ * leave usage, open helpdesk tickets, tenure).
  *
  * Score is 0–100, split into bands:  low (<34) · medium (34–66) · high (>66).
  */

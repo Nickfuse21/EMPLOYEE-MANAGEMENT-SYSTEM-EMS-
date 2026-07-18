@@ -2,9 +2,8 @@
  * Attrition / flight-risk page (HR & Super Admin).
  *
  * Shows a transparent, rule-based risk score for each active employee. Every
- * score expands into the named factors that produced it — there is no black box.
- * A short disclaimer makes clear this is a heuristic, not a machine-learning
- * prediction, so it is honest to demo and explain.
+ * score expands into the named factors that produced it, so the reason behind
+ * each score is always visible.
  */
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
@@ -44,7 +43,7 @@ export default function AttritionPage() {
           </p>
         </div>
 
-        {/* Honesty disclaimer — this is a heuristic, not ML. */}
+        {/* Disclaimer — this is a transparent rule-based score. */}
         <div className="flex items-start gap-2 rounded-xl border border-brand-200/60 bg-brand-50/60 p-3 text-sm text-brand-800 dark:border-brand-500/20 dark:bg-brand-500/10 dark:text-brand-200">
           <Info size={18} className="mt-0.5 shrink-0" />
           <p>

@@ -2,34 +2,33 @@
 
 > A plain-English walkthrough of how this Employee Management System is built.
 > Everything here describes **code that actually runs in this repo** — no
-> buzzwords, nothing you can't point to in the source. Use it to revise before an
-> interview or demo.
+> buzzwords, nothing that isn't in the source.
 
 ---
 
 ## 1. What the app does
 
-A small full-stack web app to manage employees with:
+A full-stack web app to manage employees with:
 
 - **Login / logout** with secure passwords (JWT + bcrypt).
-- **Three roles** — Super Admin, HR Manager, Employee — each sees and does
-  different things.
+- **Three roles** — Super Admin, HR Manager, Employee — each with different
+  permissions.
 - **Employee CRUD** — create, read, update, delete (soft delete).
 - **Org chart** — who reports to whom, shown as a tree.
-- **Dashboard** — counts and simple charts.
+- **Dashboard** — counts and charts.
 - **Search / filter / sort / pagination** on the employee list.
 
 ## 2. Tech stack (and why)
 
-| Layer | Choice | Why I picked it (interview answer) |
-|-------|--------|------------------------------------|
+| Layer | Choice | Why |
+|-------|--------|-----|
 | Frontend | **React + TypeScript + Vite + Tailwind** | Component-based UI, TypeScript catches bugs early, Vite is fast, Tailwind keeps styling in the markup. |
 | Backend | **Node.js + Express** | JavaScript on both sides, Express is a simple, well-known way to build a REST API. |
 | Database | **MongoDB + Mongoose** | Flexible schema; the "reporting manager" reference makes the org tree easy. |
 | Auth | **JWT + bcrypt** | JWT = stateless login token; bcrypt = one-way password hashing. |
 
-> One honest line for the interview: *"It's a MERN-style app — MongoDB, Express,
-> React, Node — with TypeScript on the frontend."*
+It's a MERN-style stack — MongoDB, Express, React, Node — with TypeScript on the
+frontend.
 
 ## 3. Folder structure
 
@@ -38,11 +37,11 @@ ems/
 ├── backend/
 │   └── src/
 │       ├── config/       # env variables + DB connection
-│       ├── models/       # Mongoose Employee schema
+│       ├── models/       # Mongoose schemas
 │       ├── middleware/   # auth check, role check, validation, errors
-│       ├── controllers/  # the actual logic for each route
+│       ├── controllers/  # the logic for each route
 │       ├── routes/       # URL → controller wiring
-│       ├── services/     # org-tree helper (kept out of controllers)
+│       ├── services/     # helpers kept out of controllers (org-tree, audit, etc.)
 │       ├── utils/        # small helpers (errors, JWT, roles)
 │       └── server.js     # starts the app
 └── frontend/
@@ -54,20 +53,20 @@ ems/
         └── types/        # shared TypeScript types
 ```
 
-**Why split it this way?** Each folder has one job. If someone asks "where does
-login live?", the answer is obvious: `controllers/authController.js`.
+Each folder has one job, so the logic for any given concern is easy to locate —
+login lives in `controllers/authController.js`, and so on.
 
 ## 4. How login works (JWT + bcrypt)
 
-Two things you should be ready to explain:
+Two key points:
 
 1. **Passwords are never stored as plain text.** When an employee is created,
    a `pre('save')` hook in the model hashes the password with **bcrypt** before
-   it hits the database. bcrypt is one-way — you can't reverse it.
-2. **Login returns a token, not a session.** On correct email + password, the
+   it hits the database. bcrypt is one-way — it can't be reversed.
+2. **Login returns a token, not a session.** On a correct email + password, the
    server signs a **JWT** (JSON Web Token) containing the user's id and role.
    The browser sends that token on every later request; the server verifies it
-   and knows who you are. No server-side session storage needed.
+   and knows who the caller is. No server-side session storage needed.
 
 ```
 Login flow:
@@ -78,8 +77,8 @@ Login flow:
 ```
 
 **Protected routes:** a middleware (`authenticate`) reads the token, verifies it,
-loads the user, and attaches it to the request. If the token is missing or fake,
-the request is rejected before it reaches any controller.
+loads the user, and attaches it to the request. If the token is missing or
+invalid, the request is rejected before it reaches any controller.
 
 ## 5. How roles work (RBAC — Role-Based Access Control)
 
@@ -99,11 +98,10 @@ Every user has one `role`. The rules:
    blocks whole routes for the wrong role.
 2. **Data level** — inside the controller, for rules that depend on the data
    (e.g. "an Employee can only edit *their own* record", "HR can't grant Super
-   Admin"). The frontend also hides buttons, but the **backend is the real
-   guard** — the UI is just for convenience.
+   Admin").
 
-> Interview soundbite: *"The client hides what you can't use, but I never trust
-> the client — every rule is re-checked on the server."*
+The frontend also hides controls the user can't use, but that is purely for UX —
+the backend re-checks every rule on the server, so the client is never trusted.
 
 ## 6. The Employee data model
 
@@ -115,8 +113,8 @@ Key fields: `employeeId` (auto `EMP-0001`), `name`, `email`, `password` (hidden)
 `role`, `reportingManager` (points to another employee), `profileImage`,
 `isDeleted` (for soft delete).
 
-**Why `reportingManager` is a reference to another employee:** that single field
-is what makes the org chart possible — follow the chain of managers upward and you
+`reportingManager` is a reference to another employee — that single self-reference
+is what makes the org chart possible: follow the chain of managers upward and you
 have the hierarchy.
 
 ## 7. The org chart & "no circular reporting"
@@ -124,7 +122,7 @@ have the hierarchy.
 - **Tree:** start from people with no manager (the top), then nest each person's
   direct reports under them.
 - **Circular check:** before saving a new manager, the code walks *up* the
-  manager's own chain. If it ever reaches the employee we're editing, that would
+  manager's own chain. If it ever reaches the employee being edited, that would
   create a loop (A reports to B who reports to A), so it's rejected. This lives in
   `services/organizationService.js`.
 
@@ -143,7 +141,7 @@ Every mutating route follows this same pipeline: **authenticate → authorize �
 validate → controller**. Errors from any step funnel into one central error
 handler that returns a consistent JSON shape.
 
-## 9. Bonus features I added (and can explain)
+## 9. Bonus features
 
 - **Pagination** on the employee list (page + limit).
 - **Soft delete** — deleting sets `isDeleted: true` instead of erasing the row,
@@ -155,61 +153,55 @@ handler that returns a consistent JSON shape.
 ## 9b. Extended modules (per-role features)
 
 On top of the core CRUD, the app has five modules that give each role something
-genuinely different to do. All of them are plain Node + Mongo — **no external AI,
-ML service, or vector database** — so every one is explainable end to end.
+distinct to do. All of them are plain Node + Mongo with no external services, so
+every result is traceable to the data it came from.
 
 ### Audit trail (Super Admin)
 An **append-only** `AuditLog` collection: every critical action (logins & failed
 logins, employee create/update/delete, salary or role changes, leave decisions)
-inserts one row via a small `auditService.recordAudit()` helper. It's called as a
-*side effect* after the real action succeeds, and wrapped in a try/catch so a
-logging failure can never break the user's request. Nothing ever updates or
-deletes a row — that's what makes it trustworthy.
-> Interview line: *"It's write-once. I log the event after the action commits, and
-> logging is best-effort so it never affects the main request."*
+inserts one row via a small `auditService.recordAudit()` helper. It runs as a
+*side effect* after the real action succeeds, wrapped in a try/catch so a logging
+failure can never break the user's request. Nothing ever updates or deletes a
+row — that write-once property is what makes the log trustworthy.
 
 ### Leave management (Employee ↔ HR)
-Employees apply for leave; HR/Admin approve or reject. The clever bit is the
-**balance is derived, not stored**: I sum the days from a person's *approved*
-requests and subtract from the allowance. There's no counter to keep in sync, so
-the balance can never be wrong.
+Employees apply for leave; HR/Admin approve or reject. The balance is **derived,
+not stored**: it sums the days from a person's *approved* requests and subtracts
+from the allowance. There's no counter to keep in sync, so the balance can never
+drift out of step with the records.
 
 ### Helpdesk (Employee ↔ HR)
 A `Ticket` model with an embedded comment thread and an auto `TKT-0001` id.
 Employees see only their own tickets; HR/Admin see all and can triage. Access is
-enforced in the controller (`assertCanView`), not just the UI.
+enforced in the controller (`assertCanView`), not just in the UI.
 
 ### Attrition / flight-risk (HR / Super Admin)
-A **transparent weighted heuristic** in `attritionService.js` — explicitly *not*
-machine learning. Each employee gets 0–100 from named factors: pay vs. the
-department median, leave utilisation, unpaid leave, open tickets, and tenure.
-Every point comes with a human-readable reason, shown in the UI. I can defend
-exactly why anyone is flagged.
-> Interview line: *"I called it a heuristic on purpose — a black-box ML score I
-> couldn't explain would be worse than a simple rule set I can."*
+A **transparent, weighted rule set** in `attritionService.js`. Each employee gets
+a 0–100 score from named factors: pay vs. the department median, leave
+utilisation, unpaid leave, open tickets, and tenure. Every point carries a
+human-readable reason shown in the UI, so it's always clear why someone is
+flagged — there is no black box.
 
-### Policy Assistant (everyone) — the honest "RAG"
-Ask the handbook a question; get an answer grounded in real policy text with
-citations. Under the hood it's **keyword-relevance search** (`policySearchService.js`):
-tokenise the question, score each paragraph by matching terms weighted by rarity
-(the TF-IDF intuition), and return the best passage. The important part is the
-**access control**: each query filters documents to `audience: <your role>` *before*
-searching, so an "executive-only" doc (e.g. compensation bands) is never even
-loaded for a standard employee — it can't leak.
-> Interview line: *"It's not an LLM or a vector DB — it's cited keyword search, and
-> restricted documents are filtered out before the search runs, not after."*
+### Policy Assistant (everyone)
+Ask the handbook a question and get an answer grounded in real policy text, with
+citations. Under the hood it's **keyword-relevance search**
+(`policySearchService.js`): tokenise the question, score each paragraph by matching
+terms weighted by rarity (the TF-IDF idea), and return the best passage. The key
+detail is **access control**: each query filters documents to `audience: <role>`
+*before* searching, so a restricted doc (e.g. compensation bands) is never even
+loaded for a user who shouldn't see it — it can't leak.
 
-## 10. Things I'd add with more time
+## 10. Future improvements
 
-Honest, realistic next steps (good to mention — shows you know what's missing):
+Realistic next steps:
 
-- **Automated tests** (Jest for the backend, a couple of endpoint tests).
+- **Automated tests** (Jest for the backend, a set of endpoint tests).
 - **Refresh tokens** so logins last longer safely.
-- **Image upload** to a service instead of storing a URL string.
-- **Deployment** to a host (Render/Railway for the API, Vercel for the frontend).
+- **Image upload** to a storage service instead of storing a URL string.
 - **Rate limiting** on the login route to slow down guessing attacks.
+- **CSV import/export** for bulk employee onboarding.
 
 ---
 
-*This document intentionally stays at the level of the actual codebase. If you can
-explain sections 4–8 out loud, you can defend this project in an interview.*
+*This document stays at the level of the actual codebase — every section maps to
+code that runs in this repository.*

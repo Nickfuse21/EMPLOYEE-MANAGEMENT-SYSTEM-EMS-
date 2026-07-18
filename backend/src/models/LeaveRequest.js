@@ -4,8 +4,7 @@
  * A single leave application: who is asking, what type, the date range, and its
  * approval status. Leave *balance* is not stored as a mutable counter — instead
  * we derive "days used" by summing approved requests (see leaveController), so
- * the balance can never drift out of sync with the underlying records. That is
- * the honest, hard-to-get-wrong way to track balances.
+ * the balance can never drift out of sync with the underlying records.
  */
 import mongoose from 'mongoose';
 

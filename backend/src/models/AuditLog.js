@@ -6,9 +6,9 @@
  * idea: entries are only ever *inserted*, never updated or deleted, so the log
  * is a trustworthy history of who did what and when.
  *
- * This is the honest, plain-Mongo version of the "immutable audit / event log"
- * idea — no event bus or event sourcing framework, just a well-indexed
- * write-once collection that any admin can review.
+ * A plain-Mongo implementation of an immutable audit log — no event bus or
+ * event-sourcing framework, just a well-indexed write-once collection that any
+ * admin can review.
  */
 import mongoose from 'mongoose';
 

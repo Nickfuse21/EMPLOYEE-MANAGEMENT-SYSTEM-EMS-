@@ -84,14 +84,13 @@ a single `docker compose up`.
 | 🛡️ **Audit trail** | Super Admin | Append-only log of security-critical actions (logins & failed logins, employee / salary / role changes, leave decisions). Read-only and filterable. |
 | 🌴 **Leave management** | Employee ↔ HR | Employees apply for leave and see a live balance; HR / Admin approve or reject. Balance is **derived** from approved requests, so it can never drift. |
 | 🎫 **Helpdesk** | Employee ↔ HR | Employees raise IT / HR tickets with a comment thread; HR / Admin triage (assign, change status & priority). |
-| 📉 **Attrition risk** | HR / Super Admin | A **transparent, rule-based** flight-risk score (0–100) per employee — every contributing factor is shown. Not ML: fully explainable. |
-| 🤖 **Policy Assistant** | Everyone | Ask the handbook a plain-English question and get an answer **grounded in real policy text and cited**. Keyword-relevance search, role-scoped so restricted docs never leak. |
+| 📉 **Attrition risk** | HR / Super Admin | A **transparent, rule-based** flight-risk score (0–100) per employee — every contributing factor is shown. |
+| 📚 **Policy Assistant** | Everyone | Ask the handbook a plain-English question and get an answer **grounded in real policy text and cited**. Keyword-relevance search, role-scoped so restricted docs never leak. |
 
-> 🧠 **On the "AI":** the Policy Assistant and Attrition score are honest,
-> dependency-free heuristics (keyword-relevance search and a weighted rule set) —
-> **no external LLM, vector DB, or ML service**. That's deliberate: every result
-> can be explained line-by-line, which is exactly what you want to defend in an
-> interview.
+> ⚙️ **How these work:** the Attrition score is a weighted rule set and the Policy
+> Assistant is keyword-relevance search over the handbook — both are
+> dependency-free and fully explainable, with every result traceable to the exact
+> data or document it came from.
 
 <details>
 <summary><b>🛡️ Click to view the full role-permission matrix</b></summary>
@@ -322,8 +321,7 @@ examples, auth, and error format.
 
 > 📐 **How it works:** [docs/TECHNICAL_DESIGN.md](./docs/TECHNICAL_DESIGN.md) is a
 > plain-English walkthrough of the architecture — auth, roles, the data model, and
-> the org chart — describing the code that actually runs here. Great for revising
-> before a demo or interview.
+> the org chart — describing the code that actually runs here.
 
 <details>
 <summary><b>📋 Click to expand the endpoint quick-list</b></summary>
