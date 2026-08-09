@@ -1,39 +1,66 @@
 # ---------------------------------------------------------------------------
 # One-command local stack: MongoDB + backend API + frontend (nginx).
-# Usage:  docker compose up --build
-#         then seed once:  docker compose exec backend npm run seed
+#
+# Usage:  cp .env.docker.example .env
+#         docker compose up --build
+#         docker compose exec backend npm run seed
+#
+# Secrets come from a git-ignored `.env` file rather than being written here —
+# this file is committed, and a JWT secret in version control is not a secret.
 # ---------------------------------------------------------------------------
 services:
   mongo:
     image: mongo:7
     restart: unless-stopped
-    ports:
-      - '27017:27017'
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:?set MONGO_USER in .env}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:?set MONGO_PASSWORD in .env}
+    # Not published to the host by default: the API reaches it over the compose
+    # network, and an unauthenticated database on 0.0.0.0:27017 is how demo
+    # databases end up ransomed. Uncomment only when you need a local GUI.
+    # ports:
+    #   - '127.0.0.1:27017:27017'
     volumes:
       - mongo_data:/data/db
+    healthcheck:
+      test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   backend:
     build: ./backend
     restart: unless-stopped
     depends_on:
-      - mongo
+      mongo:
+        # `depends_on` alone only waits for the container to start, not for
+        # MongoDB to accept connections — the API would race it and crash.
+        condition: service_healthy
     environment:
       PORT: 5000
       NODE_ENV: production
-      MONGO_URI: mongodb://mongo:27017/ems
-      JWT_SECRET: change_this_to_a_long_random_secret
-      JWT_EXPIRES_IN: 1d
-      CLIENT_ORIGIN: http://localhost:8080
-      SEED_ADMIN_EMAIL: admin@ems.com
-      SEED_ADMIN_PASSWORD: Admin@123
+      MONGO_URI: mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongo:27017/ems?authSource=admin
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env (32+ characters)}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1d}
+      CLIENT_ORIGIN: ${CLIENT_ORIGIN:-http://localhost:8080}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@ems.com}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:?set SEED_ADMIN_PASSWORD in .env}
     ports:
       - '5000:5000'
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://localhost:5000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
   frontend:
     build: ./frontend
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
       - '8080:80'
 

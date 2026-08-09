@@ -6,6 +6,7 @@
  * are embedded so the whole conversation lives with the ticket.
  */
 import mongoose from 'mongoose';
+import { nextSequence, formatReference } from './Counter.js';
 
 const { Schema, model } = mongoose;
 
@@ -41,11 +42,15 @@ const ticketSchema = new Schema(
   { timestamps: true, toJSON: { virtuals: true } },
 );
 
-/** Generate a sequential padded ticketId (TKT-0001, ...) for new tickets. */
+/**
+ * Generate a sequential padded ticketId (TKT-0001, ...) for new tickets.
+ * Uses the atomic counter for the same reason employeeId does: a count-based ID
+ * collides when two tickets are raised at the same moment.
+ */
 ticketSchema.pre('save', async function assignTicketId(next) {
   if (this.ticketId) return next();
-  const count = await this.constructor.countDocuments();
-  this.ticketId = `TKT-${String(count + 1).padStart(4, '0')}`;
+  const seq = await nextSequence('ticket');
+  this.ticketId = formatReference('TKT', seq);
   next();
 });
 

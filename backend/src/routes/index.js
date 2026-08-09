@@ -8,6 +8,7 @@ import organizationRoutes from './organizationRoutes.js';
 import dashboardRoutes from './dashboardRoutes.js';
 import auditRoutes from './auditRoutes.js';
 import leaveRoutes from './leaveRoutes.js';
+import holidayRoutes from './holidayRoutes.js';
 import ticketRoutes from './ticketRoutes.js';
 import analyticsRoutes from './analyticsRoutes.js';
 import policyRoutes from './policyRoutes.js';
@@ -22,6 +23,7 @@ router.use('/dashboard', dashboardRoutes);
 // Extended feature modules.
 router.use('/audit', auditRoutes); // Super-Admin audit trail.
 router.use('/leave', leaveRoutes); // Leave requests + balances.
+router.use('/holidays', holidayRoutes); // Public-holiday calendar.
 router.use('/tickets', ticketRoutes); // Helpdesk.
 router.use('/analytics', analyticsRoutes); // Attrition / flight-risk.
 router.use('/policies', policyRoutes); // Policy assistant.

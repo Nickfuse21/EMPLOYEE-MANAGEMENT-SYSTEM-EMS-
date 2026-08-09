@@ -12,6 +12,7 @@ import { ROLES } from '../utils/roles.js';
 import { assertNoCircularReporting } from '../services/organizationService.js';
 import { recordAudit, diffSensitiveChanges } from '../services/auditService.js';
 import { AUDIT_ACTIONS } from '../models/AuditLog.js';
+import { containsMatcher } from '../utils/sanitize.js';
 
 /** Fields an Employee (non-admin) is allowed to change on their own profile. */
 const SELF_EDITABLE_FIELDS = ['name', 'phone', 'profileImage'];
@@ -49,12 +50,11 @@ export const listEmployees = asyncHandler(async (req, res) => {
   // Base filter always excludes soft-deleted records.
   const filter = { isDeleted: false };
 
-  // Search by name OR email (case-insensitive).
+  // Search by name OR email (case-insensitive). The term is escaped before it
+  // reaches `$regex` — see utils/sanitize.js for why that matters.
   if (search) {
-    filter.$or = [
-      { name: { $regex: search, $options: 'i' } },
-      { email: { $regex: search, $options: 'i' } },
-    ];
+    const matcher = containsMatcher(search);
+    filter.$or = [{ name: matcher }, { email: matcher }];
   }
   if (department) filter.department = department;
   if (role) filter.role = role;

@@ -11,6 +11,7 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import { ROLE_VALUES, ROLES } from '../utils/roles.js';
+import { nextSequence, formatReference } from './Counter.js';
 
 const { Schema, model } = mongoose;
 
@@ -84,6 +85,19 @@ const employeeSchema = new Schema(
       default: false,
       index: true,
     },
+
+    // --- Session & brute-force protection ------------------------------------
+
+    // Incremented whenever every existing session must stop working (password
+    // change, "log out everywhere"). Embedded in the JWT and re-checked on each
+    // request, which is what makes stateless tokens revocable.
+    tokenVersion: { type: Number, default: 0, select: false },
+
+    // Consecutive failed logins, and the time until which this account is
+    // locked. IP rate limiting alone does not stop a distributed attack against
+    // one account; this does.
+    failedLoginAttempts: { type: Number, default: 0, select: false },
+    lockedUntil: { type: Date, default: null, select: false },
   },
   {
     timestamps: true, // Adds createdAt / updatedAt automatically.
@@ -106,12 +120,40 @@ employeeSchema.pre('save', async function hashPassword(next) {
 /**
  * Pre-save hook: generate a sequential, padded employeeId (EMP-0001, ...) for
  * new documents that don't already have one.
+ *
+ * The number comes from an atomic counter rather than a document count: two
+ * simultaneous creates would otherwise read the same count, build the same ID,
+ * and one of them would fail on the unique index. A counter also never re-issues
+ * an ID after a record is deleted.
  */
 employeeSchema.pre('save', async function assignEmployeeId(next) {
   if (this.employeeId) return next();
-  const count = await this.constructor.countDocuments();
-  this.employeeId = `EMP-${String(count + 1).padStart(4, '0')}`;
+  const seq = await nextSequence('employee');
+  this.employeeId = formatReference('EMP', seq);
   next();
+});
+
+/**
+ * Post-save hook: invalidate existing sessions whenever the password changes.
+ *
+ * Bumping `tokenVersion` makes every already-issued JWT for this user fail the
+ * check in the authenticate middleware, so a password change (or an admin
+ * resetting it) actually kicks an attacker out instead of leaving their stolen
+ * token valid until it expires.
+ *
+ * The increment is done with `$inc` in the database rather than on the in-memory
+ * document, because `tokenVersion` is `select: false` and is usually absent from
+ * a loaded document — incrementing an undefined value would reset the counter
+ * and silently make old tokens valid again.
+ */
+employeeSchema.pre('save', function notePasswordChange(next) {
+  this.$locals.passwordChanged = this.isModified('password') && !this.isNew;
+  next();
+});
+
+employeeSchema.post('save', async function revokeSessionsOnPasswordChange(doc) {
+  if (!doc.$locals?.passwordChanged) return;
+  await doc.constructor.updateOne({ _id: doc._id }, { $inc: { tokenVersion: 1 } });
 });
 
 /** Instance method: compare a plaintext candidate against the stored hash. */
@@ -119,17 +161,31 @@ employeeSchema.methods.comparePassword = function comparePassword(candidate) {
   return bcrypt.compare(candidate, this.password);
 };
 
+/** True while the account is temporarily locked after repeated failed logins. */
+employeeSchema.methods.isLocked = function isLocked() {
+  return Boolean(this.lockedUntil && this.lockedUntil.getTime() > Date.now());
+};
+
 /**
- * Ensure the password is never leaked, even if a document is serialised
- * manually somewhere. `id` (string) is exposed via the virtual `id` getter.
+ * Ensure secrets are never leaked, even if a document is serialised manually
+ * somewhere. `id` (string) is exposed via the virtual `id` getter.
  */
 employeeSchema.set('toJSON', {
   virtuals: true,
   transform(_doc, ret) {
     delete ret.password;
+    delete ret.tokenVersion;
+    delete ret.failedLoginAttempts;
+    delete ret.lockedUntil;
     delete ret.__v;
     return ret;
   },
 });
+
+// The employee list is almost always "not deleted, filtered, sorted by one
+// field". A compound index lets MongoDB satisfy the filter and the sort from
+// the same index instead of loading and sorting matches in memory.
+employeeSchema.index({ isDeleted: 1, department: 1, createdAt: -1 });
+employeeSchema.index({ isDeleted: 1, role: 1, status: 1 });
 
 export const Employee = model('Employee', employeeSchema);

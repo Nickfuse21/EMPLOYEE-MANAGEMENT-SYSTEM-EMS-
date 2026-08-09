@@ -29,6 +29,12 @@ export function errorHandler(err, _req, res, _next) {
     error = ApiError.conflict(`An account with that ${field} already exists`);
   } else if (err.name === 'CastError') {
     error = ApiError.badRequest(`Invalid ${err.path}: ${err.value}`);
+  } else if (err.type === 'entity.too.large') {
+    // body-parser rejected an oversized payload. Without this branch it falls
+    // through to the catch-all below and the client sees a misleading 500.
+    error = new ApiError(413, 'Request body is too large');
+  } else if (err.type === 'entity.parse.failed') {
+    error = ApiError.badRequest('Request body is not valid JSON');
   } else if (!(err instanceof ApiError)) {
     // Unknown/unexpected error → log it and hide internals from the client.
     console.error('❌ Unexpected error:', err);

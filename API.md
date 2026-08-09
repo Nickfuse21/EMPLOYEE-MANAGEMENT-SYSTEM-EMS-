@@ -13,12 +13,31 @@ Errors follow a consistent shape:
 }
 ```
 
+Common status codes: `400` validation, `401` unauthenticated, `403` forbidden,
+`404` missing, `409` conflict, `413` body too large, `422` business rule
+violated, `429` rate limited.
+
 ### Authentication
 
 The API accepts the JWT in **either** of two ways:
 
 - an http-only cookie named `ems_token` (set automatically on login), or
 - an `Authorization: Bearer <token>` header.
+
+Every request re-loads the caller from the database and authorises against the
+**stored** role, not the role claimed inside the token. Tokens also carry a
+session version, so a password change or `/auth/logout-all` invalidates them
+immediately rather than leaving them valid until expiry.
+
+### Rate limits
+
+| Scope | Limit |
+|-------|-------|
+| `/api/auth/login`, `/api/auth/change-password` | 5 **failed** attempts per 15 min per IP |
+| Everything else under `/api` | 300 requests per 15 min per IP |
+| `/api/health` | Not limited, so uptime probes are never throttled |
+
+Exceeding a limit returns `429` in the standard error shape.
 
 ---
 
@@ -42,13 +61,46 @@ Authenticate and receive a token.
 }
 ```
 
-**401** — invalid credentials.
+**401** — invalid credentials. The message is identical for an unknown email and
+a wrong password, so the endpoint cannot be used to discover which emails exist.
+
+**429** — either too many attempts from this IP (5 failures per 15 minutes) or
+the account itself is locked after 5 consecutive failures. A locked account is
+refused *before* the password is checked, so the lock cannot be used to confirm a
+correct password.
 
 ### POST `/auth/logout`
 Clears the auth cookie. → `200 { "success": true }`
 
+Note this only drops the cookie — a bearer token already issued keeps working
+until it expires. Use `/auth/logout-all` to actually revoke it.
+
+### POST `/auth/logout-all` 🔒
+Revokes **every** session for the caller by bumping their token version. Tokens
+already handed out — including any an attacker holds — stop working immediately.
+→ `200 { "success": true }`
+
+### POST `/auth/change-password` 🔒
+Rotate your own password. Requires the current one, so a hijacked session cannot
+lock the real owner out. On success **all sessions are revoked** and the caller
+must log in again.
+
+**Body**
+```json
+{ "currentPassword": "Password@123", "newPassword": "Brand@NewPass9" }
+```
+
+The new password must be 10–72 characters with lower case, upper case, a digit,
+and a symbol, and must not be a commonly-used password.
+
+- **400** — the new password is weak or the same as the current one.
+- **401** — the current password is wrong.
+
 ### GET `/auth/me` 🔒
 Returns the currently authenticated user.
+
+**401** is returned when the token is invalid, the account was deleted, **or the
+session has been revoked** since the token was issued.
 
 ---
 
@@ -206,26 +258,104 @@ deleted.
 
 ## Leave
 
+Leave is measured in **working days**: weekends and dates in the holiday
+calendar are never charged against an entitlement.
+
 ### GET `/leave/balance` 🔒
-The caller's own remaining balance per paid leave type.
+The caller's balance per capped leave type, for the current leave year.
 ```json
-{ "success": true, "data": [ { "type": "annual", "allowance": 20, "used": 5, "remaining": 15 } ] }
+{
+  "success": true,
+  "data": [
+    { "type": "annual", "allowance": 20, "used": 5, "pending": 2, "remaining": 13 }
+  ]
+}
+```
+
+`pending` counts days that have been requested but not yet decided. They are
+subtracted from `remaining` too — otherwise several individually-affordable
+requests could all be approved and take the employee over their entitlement.
+
+### POST `/leave/preview` 🔒
+Prices a date range **without** submitting it, so the UI can show what a request
+will cost before the employee commits.
+
+**Body:** `startDate`, `endDate`, optional `halfDay`.
+
+**200**
+```json
+{
+  "success": true,
+  "data": {
+    "workingDays": 5,
+    "calendarDays": 8,
+    "excluded": [
+      { "date": "2026-08-05", "reason": "Founders Day" },
+      { "date": "2026-08-08", "reason": "Weekend" }
+    ]
+  }
+}
 ```
 
 ### GET `/leave` 🔒
-Employees receive only their own requests; HR & Super Admin receive everyone's
-(optionally filtered by `?status=`).
+By default a user receives their own requests **plus anything awaiting their
+decision**; HR & Super Admin receive everyone's.
+
+| Query | Type | Description |
+|-------|------|-------------|
+| `status` | enum | `pending` \| `approved` \| `rejected` \| `cancelled` |
+| `scope` | enum | `inbox` — only pending requests routed to the caller. `mine` — for HR, only their own requests. |
 
 ### POST `/leave` 🔒
-Apply for leave (always on your own behalf). Body: `type` (`annual|sick|casual|unpaid`),
-`startDate`, `endDate`, optional `reason`. Day count is computed server-side. → `201`
+Apply for leave (always on your own behalf).
 
-### PATCH `/leave/:id/decision` 🔒 · Super Admin, HR
-Approve or reject a pending request. Body: `{ "decision": "approved" | "rejected", "reviewNote": "" }`.
-An approval is what draws down the balance.
+**Body:** `type` (`annual\|sick\|casual\|unpaid`), `startDate`, `endDate`,
+optional `reason`, optional `halfDay` (`first_half\|second_half`, single date only).
+
+The day count is computed server-side from the working-day calendar, and the
+request is routed to the employee's reporting manager (`pendingWith`), or left
+for HR when they have none.
+
+- **201** — created.
+- **400** — the range is backwards, or contains no working days at all.
+- **409** — the dates overlap an existing pending or approved request.
+- **422** — not enough remaining entitlement of that type.
+
+### PATCH `/leave/:id/decision` 🔒
+Approve or reject a pending request. Body:
+`{ "decision": "approved" | "rejected", "reviewNote": "" }`.
+
+Permitted for the manager the request was routed to, or for HR / Super Admin —
+**not** restricted by role alone, since a reporting manager is usually a regular
+employee. Nobody may decide their own request, including HR. The balance is
+re-checked at approval time, because other requests may have been approved since
+this one was submitted.
+
+- **403** — not your request to decide, or it is your own.
+- **400** — already decided.
 
 ### PATCH `/leave/:id/cancel` 🔒
-The owner (or a manager) cancels a still-pending request.
+The owner (or HR) cancels a request. Pending requests can always be withdrawn; an
+approved request can be cancelled while it is still in the future, which returns
+the days to the balance. Once approved leave has started, only HR can cancel it.
+
+---
+
+## Holiday calendar
+
+Public holidays are data rather than code, so HR can maintain them without a
+deployment. Every holiday changes what leave costs across the whole company.
+
+### GET `/holidays` 🔒
+The calendar for one year (`?year=2026`, defaults to the current year), earliest
+first. Readable by any authenticated user — the leave form needs it.
+
+### POST `/holidays` 🔒 · Super Admin, HR
+Body: `date` (ISO), `name`, optional `region`. → `201`
+**409** if that date is already a holiday.
+
+### DELETE `/holidays/:id` 🔒 · Super Admin, HR
+Removes a holiday. → `200`
 
 ---
 

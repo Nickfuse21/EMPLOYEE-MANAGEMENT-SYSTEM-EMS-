@@ -7,6 +7,7 @@
  */
 import { AuditLog } from '../models/AuditLog.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { containsMatcher } from '../utils/sanitize.js';
 
 /**
  * GET /api/audit
@@ -19,11 +20,9 @@ export const listAuditLogs = asyncHandler(async (req, res) => {
   const filter = {};
   if (action) filter.action = action;
   if (search) {
-    filter.$or = [
-      { actorName: { $regex: search, $options: 'i' } },
-      { targetName: { $regex: search, $options: 'i' } },
-      { summary: { $regex: search, $options: 'i' } },
-    ];
+    // Escaped before it reaches `$regex` — see utils/sanitize.js.
+    const matcher = containsMatcher(search);
+    filter.$or = [{ actorName: matcher }, { targetName: matcher }, { summary: matcher }];
   }
 
   const pageNum = Math.max(1, Number(page));

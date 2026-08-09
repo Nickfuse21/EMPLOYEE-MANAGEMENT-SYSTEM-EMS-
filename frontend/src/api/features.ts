@@ -8,7 +8,10 @@ import type {
   AuditLog,
   LeaveRequest,
   LeaveBalance,
+  LeavePreview,
   LeaveType,
+  HalfDaySlot,
+  Holiday,
   Ticket,
   TicketCategory,
   TicketPriority,
@@ -26,15 +29,33 @@ export const auditApi = {
 };
 
 export const leaveApi = {
-  list: async (status?: string): Promise<LeaveRequest[]> => {
-    const { data } = await api.get('/leave', { params: status ? { status } : {} });
+  list: async (params: { status?: string; scope?: 'mine' | 'inbox' } = {}): Promise<LeaveRequest[]> => {
+    const { data } = await api.get('/leave', { params });
     return data.data;
   },
   balance: async (): Promise<LeaveBalance[]> => {
     const { data } = await api.get('/leave/balance');
     return data.data;
   },
-  create: async (payload: { type: LeaveType; startDate: string; endDate: string; reason?: string }): Promise<LeaveRequest> => {
+  /**
+   * Prices a date range without submitting it, so the form can show how many
+   * working days it will actually cost before the employee commits.
+   */
+  preview: async (payload: {
+    startDate: string;
+    endDate: string;
+    halfDay?: HalfDaySlot | null;
+  }): Promise<LeavePreview> => {
+    const { data } = await api.post('/leave/preview', payload);
+    return data.data;
+  },
+  create: async (payload: {
+    type: LeaveType;
+    startDate: string;
+    endDate: string;
+    reason?: string;
+    halfDay?: HalfDaySlot | null;
+  }): Promise<LeaveRequest> => {
     const { data } = await api.post('/leave', payload);
     return data.data;
   },
@@ -44,6 +65,20 @@ export const leaveApi = {
   },
   cancel: async (id: string): Promise<void> => {
     await api.patch(`/leave/${id}/cancel`);
+  },
+};
+
+export const holidayApi = {
+  list: async (year?: number): Promise<Holiday[]> => {
+    const { data } = await api.get('/holidays', { params: year ? { year } : {} });
+    return data.data;
+  },
+  create: async (payload: { date: string; name: string; region?: string }): Promise<Holiday> => {
+    const { data } = await api.post('/holidays', payload);
+    return data.data;
+  },
+  remove: async (id: string): Promise<void> => {
+    await api.delete(`/holidays/${id}`);
   },
 };
 

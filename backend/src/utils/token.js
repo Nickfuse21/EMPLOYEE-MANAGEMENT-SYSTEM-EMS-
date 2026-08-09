@@ -9,13 +9,19 @@ import { env, isProduction } from '../config/env.js';
 export const AUTH_COOKIE = 'ems_token';
 
 /**
- * Signs a JWT containing the user's id and role. The role is embedded so the
- * auth middleware can authorise without an extra DB lookup on every request.
+ * Signs a JWT containing the user's id, role, and session version.
+ *
+ * The role is embedded so the auth middleware can authorise without an extra
+ * lookup. `ver` mirrors the user's `tokenVersion`: bumping that column in the
+ * database instantly invalidates every token already issued, which is what makes
+ * an otherwise-stateless token revocable.
  */
 export function signToken(user) {
-  return jwt.sign({ sub: user._id.toString(), role: user.role }, env.jwtSecret, {
-    expiresIn: env.jwtExpiresIn,
-  });
+  return jwt.sign(
+    { sub: user._id.toString(), role: user.role, ver: user.tokenVersion ?? 0 },
+    env.jwtSecret,
+    { expiresIn: env.jwtExpiresIn },
+  );
 }
 
 /** Verifies a token and returns its decoded payload, or throws if invalid. */

@@ -33,4 +33,12 @@ export class ApiError extends Error {
   static conflict(message = 'Resource already exists') {
     return new ApiError(409, message);
   }
+
+  static unprocessable(message = 'Request could not be processed', details) {
+    return new ApiError(422, message, details);
+  }
+
+  static tooManyRequests(message = 'Too many requests. Please try again later') {
+    return new ApiError(429, message);
+  }
 }

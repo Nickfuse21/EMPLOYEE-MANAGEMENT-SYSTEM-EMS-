@@ -68,7 +68,8 @@ a single `docker compose up`.
 
 | Area | What's implemented |
 |------|--------------------|
-| 🔐 **Authentication** | JWT + bcrypt, login / logout, http-only cookie, protected routes, password hashing |
+| 🔐 **Authentication** | JWT + bcrypt, login / logout, http-only cookie, protected routes, **revocable sessions**, password policy, account lockout & rate limiting |
+| 🧪 **Tests & CI** | 119 API tests (vitest + supertest) against an in-memory MongoDB, run on every push by GitHub Actions |
 | 👥 **Role-Based Access** | Three roles — Super Admin, HR Manager, Employee — enforced on **both** server and client |
 | 📊 **Dashboard** | Total / Active / Inactive counts, department totals, and charts by department & role |
 | 📝 **Employee CRUD** | Create, read, update, and soft-delete employees with a full field set |
@@ -82,7 +83,7 @@ a single `docker compose up`.
 | Module | Role focus | What it does |
 |--------|-----------|--------------|
 | 🛡️ **Audit trail** | Super Admin | Append-only log of security-critical actions (logins & failed logins, employee / salary / role changes, leave decisions). Read-only and filterable. |
-| 🌴 **Leave management** | Employee ↔ HR | Employees apply for leave and see a live balance; HR / Admin approve or reject. Balance is **derived** from approved requests, so it can never drift. |
+| 🌴 **Leave management** | Everyone | Leave is charged in **working days** — weekends and a maintainable **public-holiday calendar** are excluded, and the form shows the cost before you submit. Requests route to the employee's **own reporting manager** (HR can step in), overlapping dates and over-drawn balances are rejected, and pending days count against the balance so leave cannot be double-spent. Balance is **derived** from the requests themselves, so it can never drift. |
 | 🎫 **Helpdesk** | Employee ↔ HR | Employees raise IT / HR tickets with a comment thread; HR / Admin triage (assign, change status & priority). |
 | 📉 **Attrition risk** | HR / Super Admin | A **transparent, rule-based** flight-risk score (0–100) per employee — every contributing factor is shown. |
 | 📚 **Policy Assistant** | Everyone | Ask the handbook a plain-English question and get an answer **grounded in real policy text and cited**. Keyword-relevance search, role-scoped so restricted docs never leak. |
@@ -108,7 +109,8 @@ a single `docker compose up`.
 | View / edit **own** profile (limited fields) | ✅ | ✅ | ✅ |
 | View the audit trail | ✅ | ❌ | ❌ |
 | View attrition-risk report | ✅ | ✅ | ❌ |
-| Approve / reject leave | ✅ | ✅ | ❌ |
+| Approve / reject leave | ✅ (any) | ✅ (any) | ✅ (own reports only) |
+| Manage the public-holiday calendar | ✅ | ✅ | ❌ |
 | Triage helpdesk tickets | ✅ | ✅ | ❌ |
 | Apply for leave · raise a ticket · ask the Policy Assistant | ✅ | ✅ | ✅ |
 
@@ -292,10 +294,16 @@ Open **http://localhost:5173** and log in with a demo account below. 🎉
 
 ```bash
 cd ems
+cp .env.docker.example .env   # then edit .env and set real secrets
 docker compose up --build
 # in another terminal, seed the database once:
 docker compose exec backend npm run seed
 ```
+
+> 🔐 Secrets live in a git-ignored `.env` rather than in `docker-compose.yml`.
+> Compose refuses to start until `JWT_SECRET`, the Mongo credentials, and
+> `SEED_ADMIN_PASSWORD` are set — MongoDB runs with authentication enabled and is
+> **not** published to the host.
 
 | Service | URL |
 |---------|-----|
@@ -364,12 +372,67 @@ POST   /api/policies/ask              # ask the Policy Assistant
 
 ## 🔒 Security notes
 
+**Credentials & sessions**
+
 - 🔑 Passwords are hashed with **bcrypt** (salt rounds = 10) and never returned by the API.
+- 💪 A **password policy** is enforced wherever a password is set: 10–72 characters,
+  mixed case, a digit, a symbol, and not on a list of common passwords.
 - 🍪 JWTs are delivered as an **http-only cookie** (XSS-resistant); a bearer-token
   fallback is also supported for non-browser clients.
-- 🛡️ Every mutating endpoint **re-checks the caller's role on the server** — the client
-  guards are for UX only.
+- 🚫 **Sessions are revocable.** Each token carries a version that is re-checked on
+  every request, so changing a password or calling `POST /api/auth/logout-all`
+  invalidates tokens already issued instead of leaving them valid until expiry.
+- 🐌 **Brute force is bounded twice over** — an IP rate limit on `/api/auth/*`
+  (5 failed attempts per 15 min) plus a **per-account lockout** after 5
+  consecutive failures, which also stops a distributed attack that rotates IPs.
+
+**Request handling**
+
+- 🪖 **helmet** sets CSP, HSTS, `X-Content-Type-Options`, and frame-denial headers.
+- 🧼 Search terms are **escaped before reaching `$regex`** — unescaped user input
+  there is both a data leak (`.*` matches everything) and a denial of service
+  (a backtracking pattern blocks the event loop).
+- 📏 Request bodies are capped at 2 MB, and the API is fronted by a general
+  300-requests-per-15-min limiter.
+- 🧭 `trust proxy` is set to a single hop, so a client cannot forge
+  `X-Forwarded-For` to slip past the rate limiters.
+
+**Authorisation & data integrity**
+
+- 🛡️ Every mutating endpoint **re-checks the caller's role on the server** from the
+  database record, not from the token's claims — the client guards are for UX only.
 - ♻️ **Circular reporting relationships are rejected** before they can be saved.
+- 🔢 Human-readable IDs (`EMP-0001`, `TKT-0001`) come from an **atomic counter**, so
+  simultaneous creates cannot collide or reuse an ID after a delete.
+- 🚨 A production deployment **refuses to start** with a missing, placeholder, or
+  under-32-character `JWT_SECRET`.
+
+---
+
+## ✅ Tests
+
+```bash
+cd backend
+npm test              # full suite
+npm run test:watch    # watch mode
+npm run test:coverage # with coverage
+```
+
+**119 tests** run against a real MongoDB started in-memory for the run
+(`mongodb-memory-server`) — no mocked database, no manual setup, and each test
+file gets its own isolated database.
+
+| Suite | Covers |
+|-------|--------|
+| `auth.test.js` | Login, generic failure messages, account lockout, session revocation, password rotation |
+| `employees.rbac.test.js` | The full permission matrix, including every *deny* path and token forgery |
+| `leave.test.js` | Working-day maths, holidays, balance & overlap rules, the approval chain |
+| `security.test.js` | Regex escaping, ID collisions under concurrency, security headers, rate limiting |
+| `config.test.js` | The production configuration guards |
+| `health.test.js` | App boot, health check, and the error-response contract |
+
+CI runs the suite plus a frontend type-check and build on every push and pull
+request — see [.github/workflows/ci.yml](./.github/workflows/ci.yml).
 
 ---
 

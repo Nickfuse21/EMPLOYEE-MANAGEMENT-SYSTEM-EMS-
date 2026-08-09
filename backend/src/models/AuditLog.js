@@ -18,12 +18,16 @@ const { Schema, model } = mongoose;
 export const AUDIT_ACTIONS = Object.freeze({
   LOGIN: 'auth.login',
   LOGIN_FAILED: 'auth.login_failed',
+  LOGIN_BLOCKED: 'auth.login_blocked',
+  PASSWORD_CHANGED: 'auth.password_changed',
+  SESSIONS_REVOKED: 'auth.sessions_revoked',
   EMPLOYEE_CREATED: 'employee.created',
   EMPLOYEE_UPDATED: 'employee.updated',
   EMPLOYEE_DELETED: 'employee.deleted',
   SALARY_CHANGED: 'employee.salary_changed',
   ROLE_CHANGED: 'employee.role_changed',
   MANAGER_CHANGED: 'employee.manager_changed',
+  LEAVE_REQUESTED: 'leave.requested',
   LEAVE_DECISION: 'leave.decision',
 });
 

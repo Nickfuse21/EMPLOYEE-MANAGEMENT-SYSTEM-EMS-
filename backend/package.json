@@ -7,9 +7,18 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "seed": "node src/seed.js"
+    "seed": "node src/seed.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
-  "keywords": ["ems", "express", "mongodb", "jwt", "rbac"],
+  "keywords": [
+    "ems",
+    "express",
+    "mongodb",
+    "jwt",
+    "rbac"
+  ],
   "license": "MIT",
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -17,9 +26,16 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.2",
+    "express-rate-limit": "^8.6.2",
     "express-validator": "^7.2.1",
+    "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.9.5",
     "morgan": "^1.10.0"
+  },
+  "devDependencies": {
+    "mongodb-memory-server": "^11.2.0",
+    "supertest": "^7.2.2",
+    "vitest": "^4.1.10"
   }
 }

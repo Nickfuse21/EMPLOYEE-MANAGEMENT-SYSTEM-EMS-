@@ -1,15 +1,16 @@
 /**
  * Leave page.
  *
- * Every user sees their own balance and can apply for leave. HR & Super Admin
- * additionally see a "pending approvals" queue and can approve/reject requests.
- * The list adapts: an employee sees only their own requests; a manager sees all.
+ * Every user sees their own balance and can apply for leave. Requests are routed
+ * to the employee's own reporting manager, so the approvals queue is not an
+ * HR-only feature — any user with someone reporting to them may see one. HR and
+ * Super Admin additionally see every request in the company.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { CalendarDays, Plus, Check, X, Clock } from 'lucide-react';
 import { leaveApi } from '../api/features';
-import type { LeaveBalance, LeaveRequest } from '../types';
+import type { LeaveBalance, LeavePreview, LeaveRequest } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { LEAVE_TYPE_OPTIONS, STATUS_TONE } from '../lib/constants';
 import { formatDate } from '../lib/format';
@@ -43,7 +44,21 @@ export default function LeavePage() {
   };
   useEffect(load, []);
 
-  const pending = useMemo(() => requests.filter((r) => r.status === 'pending'), [requests]);
+  /**
+   * Requests this user may act on: everything pending for HR, and for everyone
+   * else only what was routed to them. Mirrors the server's rule — the server is
+   * still the authority; this just avoids showing buttons that would 403.
+   */
+  const awaitingMe = useMemo(
+    () =>
+      requests.filter(
+        (r) =>
+          r.status === 'pending' &&
+          r.employee._id !== user?._id &&
+          (isManager || r.pendingWith?._id === user?._id),
+      ),
+    [requests, isManager, user?._id],
+  );
 
   const decide = async (id: string, decision: 'approved' | 'rejected') => {
     try {
@@ -90,26 +105,35 @@ export default function LeavePage() {
                 {b.remaining}
                 <span className="text-base font-medium text-slate-400"> / {b.allowance} days</span>
               </p>
-              {/* Usage bar. */}
-              <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+              {/* Usage bar: approved days solid, still-pending days hatched on
+                  top, because pending days are already committed against the
+                  allowance and "remaining" reflects that. */}
+              <div className="mt-3 flex h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
                 <div
-                  className="h-full rounded-full bg-brand-gradient"
+                  className="h-full bg-brand-gradient"
                   style={{ width: `${Math.min(100, (b.used / b.allowance) * 100)}%` }}
                 />
+                <div
+                  className="h-full bg-amber-400/70"
+                  style={{ width: `${Math.min(100, (b.pending / b.allowance) * 100)}%` }}
+                />
               </div>
-              <p className="mt-1.5 text-xs text-slate-400">{b.used} used</p>
+              <p className="mt-1.5 text-xs text-slate-400">
+                {b.used} used
+                {b.pending > 0 && <span className="text-amber-500"> · {b.pending} pending</span>}
+              </p>
             </motion.div>
           ))}
         </motion.div>
 
-        {/* Pending approvals (managers only). */}
-        {isManager && pending.length > 0 && (
+        {/* Approvals queue — shown to whoever the requests are routed to. */}
+        {awaitingMe.length > 0 && (
           <section>
             <h2 className="mb-3 flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-200">
-              <Clock size={18} className="text-amber-500" /> Pending approvals ({pending.length})
+              <Clock size={18} className="text-amber-500" /> Awaiting your approval ({awaitingMe.length})
             </h2>
             <div className="space-y-3">
-              {pending.map((r) => (
+              {awaitingMe.map((r) => (
                 <div key={r._id} className="card flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <Avatar name={r.employee.name} src={r.employee.profileImage} size="sm" ring />
@@ -211,6 +235,26 @@ function LeaveFormModal({
   const [endDate, setEndDate] = useState('');
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
+  const [preview, setPreview] = useState<LeavePreview | null>(null);
+
+  // Price the range as soon as both dates are set. Showing "3 working days" up
+  // front — and which dates were skipped — means nobody is surprised by the
+  // number that comes off their balance.
+  useEffect(() => {
+    if (!startDate || !endDate || endDate < startDate) {
+      setPreview(null);
+      return;
+    }
+    let cancelled = false;
+    leaveApi
+      .preview({ startDate, endDate })
+      .then((p) => !cancelled && setPreview(p))
+      .catch(() => !cancelled && setPreview(null));
+
+    return () => {
+      cancelled = true; // Ignore a slow response for a range the user has moved on from.
+    };
+  }, [startDate, endDate]);
 
   const submit = async () => {
     if (!startDate || !endDate) return onError('Please pick a start and end date');
@@ -220,6 +264,7 @@ function LeaveFormModal({
       setStartDate('');
       setEndDate('');
       setReason('');
+      setPreview(null);
       onCreated();
     } catch (err) {
       onError((err as Error).message);
@@ -261,6 +306,28 @@ function LeaveFormModal({
             <input type="date" className="input" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
           </div>
         </div>
+        {preview && (
+          <div className="rounded-xl border border-brand-200 bg-brand-50/60 p-3 text-sm dark:border-brand-500/20 dark:bg-brand-500/10">
+            <p className="font-semibold text-brand-700 dark:text-brand-300">
+              {preview.workingDays} working day{preview.workingDays === 1 ? '' : 's'}
+              <span className="font-normal text-slate-500 dark:text-slate-400">
+                {' '}
+                across {preview.calendarDays} calendar day
+                {preview.calendarDays === 1 ? '' : 's'}
+              </span>
+            </p>
+            {preview.excluded.length > 0 && (
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                Not charged: {preview.excluded.map((d) => `${d.date} (${d.reason})`).join(', ')}
+              </p>
+            )}
+            {preview.workingDays === 0 && (
+              <p className="mt-1 text-xs font-medium text-red-600 dark:text-red-400">
+                This range has no working days in it.
+              </p>
+            )}
+          </div>
+        )}
         <div>
           <label className="label">Reason (optional)</label>
           <textarea className="input" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Family holiday…" />

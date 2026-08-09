@@ -12,7 +12,10 @@
  */
 import { connectDatabase, disconnectDatabase } from './config/db.js';
 import { Employee } from './models/Employee.js';
-import { LeaveRequest, countLeaveDays } from './models/LeaveRequest.js';
+import { LeaveRequest } from './models/LeaveRequest.js';
+import { Holiday, toUtcMidnight } from './models/Holiday.js';
+import { Counter } from './models/Counter.js';
+import { countWorkingDays } from './services/leaveCalendarService.js';
 import { Ticket } from './models/Ticket.js';
 import { PolicyDoc } from './models/PolicyDoc.js';
 import { env } from './config/env.js';
@@ -24,12 +27,16 @@ async function seed() {
   await connectDatabase();
   console.log('🌱 Seeding database...');
 
-  // Start from a clean slate for repeatable demos.
+  // Start from a clean slate for repeatable demos. The ID counters are reset
+  // too, so a re-seeded database starts again at EMP-0001 / TKT-0001 rather than
+  // continuing from wherever the previous run left off.
   await Promise.all([
     Employee.deleteMany({}),
     LeaveRequest.deleteMany({}),
     Ticket.deleteMany({}),
     PolicyDoc.deleteMany({}),
+    Holiday.deleteMany({}),
+    Counter.deleteMany({}),
   ]);
 
   // NOTE: create documents individually so the pre-save hooks (password hash +
@@ -118,23 +125,47 @@ async function seed() {
     status: 'active',
   });
 
+  // --- Public holidays (the leave engine charges working days only) ---------
+  await Holiday.create(
+    [
+      ['2026-01-01', "New Year's Day"],
+      ['2026-01-26', 'Republic Day'],
+      ['2026-03-06', 'Holi'],
+      ['2026-05-01', 'Labour Day'],
+      ['2026-08-15', 'Independence Day'],
+      ['2026-10-02', 'Gandhi Jayanti'],
+      ['2026-11-08', 'Diwali'],
+      ['2026-12-25', 'Christmas Day'],
+    ].map(([date, name]) => ({ date: toUtcMidnight(date), name })),
+  );
+
   // --- Leave requests (drives balances + the flight-risk signal) ------------
-  const leaveRange = (type, status, start, end) => ({
-    employee: john._id,
-    type,
-    status,
-    startDate: new Date(start),
-    endDate: new Date(end),
-    days: countLeaveDays(start, end),
-    reason: `${type} leave`,
-    ...(status !== 'pending' ? { reviewedBy: hr._id, reviewedAt: new Date() } : {}),
-  });
-  await LeaveRequest.create([
-    leaveRange('annual', 'approved', '2026-02-10', '2026-02-24'), // 15 approved days
-    leaveRange('sick', 'approved', '2026-04-06', '2026-04-08'),
-    leaveRange('unpaid', 'approved', '2026-05-18', '2026-05-19'), // unpaid → risk signal
-    leaveRange('casual', 'pending', '2026-08-03', '2026-08-04'), // awaiting HR decision
-  ]);
+  // Day counts come from the same calendar service the API uses, so seeded data
+  // and live data are priced identically.
+  const leaveRange = async (type, status, start, end) => {
+    const { days, breakdown } = await countWorkingDays(start, end);
+    return {
+      employee: john._id,
+      type,
+      status,
+      startDate: new Date(start),
+      endDate: new Date(end),
+      days,
+      calendarDays: breakdown.total,
+      reason: `${type} leave`,
+      ...(status === 'pending'
+        ? { pendingWith: john.reportingManager ?? null }
+        : { reviewedBy: hr._id, reviewedAt: new Date() }),
+    };
+  };
+  await LeaveRequest.create(
+    await Promise.all([
+      leaveRange('annual', 'approved', '2026-02-10', '2026-02-20'),
+      leaveRange('sick', 'approved', '2026-04-06', '2026-04-08'),
+      leaveRange('unpaid', 'approved', '2026-05-18', '2026-05-19'), // unpaid → risk signal
+      leaveRange('casual', 'pending', '2026-08-03', '2026-08-04'), // awaiting a decision
+    ]),
+  );
 
   // --- Helpdesk tickets ------------------------------------------------------
   await Ticket.create([

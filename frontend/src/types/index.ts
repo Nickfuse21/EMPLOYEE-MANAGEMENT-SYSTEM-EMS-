@@ -100,27 +100,53 @@ export interface AuditLog {
 export type LeaveType = 'annual' | 'sick' | 'casual' | 'unpaid';
 export type LeaveStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
 
+export type HalfDaySlot = 'first_half' | 'second_half';
+
 export interface LeaveRequest {
   _id: string;
   employee: Employee;
   type: LeaveType;
   startDate: string;
   endDate: string;
+  /** Working days charged — weekends and public holidays already excluded. */
   days: number;
+  /** Raw inclusive span, shown alongside `days` for context. */
+  calendarDays?: number;
+  halfDay?: HalfDaySlot | null;
   reason?: string;
   status: LeaveStatus;
+  /** The manager the request was routed to (null when it went straight to HR). */
+  pendingWith?: ManagerRef | null;
   reviewedBy?: { _id: string; name: string } | null;
   reviewNote?: string;
   reviewedAt?: string | null;
   createdAt: string;
 }
 
-/** One paid-leave type's balance. */
+/** One paid-leave type's balance for the current leave year. */
 export interface LeaveBalance {
   type: LeaveType;
   allowance: number;
+  /** Days already approved. */
   used: number;
+  /** Days requested but not yet decided — these are committed too. */
+  pending: number;
   remaining: number;
+}
+
+/** What a date range would cost, before the request is submitted. */
+export interface LeavePreview {
+  workingDays: number;
+  calendarDays: number;
+  excluded: { date: string; reason: string }[];
+}
+
+/** A company holiday. */
+export interface Holiday {
+  _id: string;
+  date: string;
+  name: string;
+  region?: string;
 }
 
 export type TicketCategory = 'it' | 'hr' | 'payroll' | 'facilities' | 'other';

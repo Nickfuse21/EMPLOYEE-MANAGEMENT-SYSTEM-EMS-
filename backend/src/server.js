@@ -6,10 +6,22 @@
  */
 import { createApp } from './app.js';
 import { connectDatabase, disconnectDatabase } from './config/db.js';
-import { env } from './config/env.js';
+import {
+  env,
+  getProductionConfigurationError,
+  getProductionConfigurationWarnings,
+} from './config/env.js';
 
 async function start() {
   try {
+    // Fail before opening a port rather than after: a server that is listening
+    // with a forgeable JWT secret is worse than one that never started.
+    const configurationError = getProductionConfigurationError();
+    if (configurationError) throw new Error(configurationError);
+    for (const warning of getProductionConfigurationWarnings()) {
+      console.warn(`⚠️  ${warning}`);
+    }
+
     await connectDatabase();
 
     const app = createApp();

@@ -1,0 +1,78 @@
+# ---------------------------------------------------------------------------
+# Continuous integration.
+#
+# Runs on every push and pull request. The backend job runs the API test suite
+# against an in-memory MongoDB (started by the tests themselves, so no service
+# container is needed); the frontend job type-checks and builds the SPA.
+#
+# The two jobs are independent and run in parallel — a frontend typo should not
+# hide a backend failure.
+# ---------------------------------------------------------------------------
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# A new push to the same branch cancels the previous, still-running check.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      # Cache the mongod binary that mongodb-memory-server downloads on first
+      # run — without this every CI run re-downloads ~100 MB.
+      - name: Cache MongoDB binaries
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/mongodb-binaries
+          key: mongodb-binaries-${{ runner.os }}
+
+      - run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Check for known vulnerabilities
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
+  frontend:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+
+      # `npm run build` runs `tsc --noEmit` first, so this covers type checking.
+      - name: Type-check and build
+        run: npm run build
